@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -11,13 +13,112 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+  bool _isLoading = false;
 
-  void _handleRegister() {
-    // Dummy register: back to login on success
+  Future<void> _handleRegister() async {
+    if (_nameController.text.trim().isEmpty ||
+        _emailController.text.trim().isEmpty ||
+        _passwordController.text.trim().isEmpty ||
+        _confirmPasswordController.text.trim().isEmpty) {
+      _showCustomSnackBar('Harap isi semua kolom.', isError: true);
+      return;
+    }
+
+    if (_passwordController.text != _confirmPasswordController.text) {
+      _showCustomSnackBar('Kata sandi tidak cocok.', isError: true);
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // 1. Buat user di Firebase Auth
+      UserCredential userCredential = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(
+            email: _emailController.text.trim(),
+            password: _passwordController.text.trim(),
+          );
+
+      // 2. Simpan profil ke Firestore
+      if (userCredential.user != null) {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userCredential.user!.uid)
+            .set({
+              'id': userCredential.user!.uid,
+              'namaPanggilan': _nameController.text.trim(),
+              'email': _emailController.text.trim(),
+              'role': 'orang_tua',   
+              'createdAt': FieldValue.serverTimestamp(),
+            });
+
+        if (mounted) {
+          _showCustomSnackBar(
+            'Registrasi berhasil! Silakan masuk.',  
+            isError: false,
+          );
+          Navigator.pop(context); // Kembali ke halaman login
+        }
+      }
+    } on FirebaseAuthException catch (e) {
+      String message = 'Terjadi kesalahan.';
+      if (e.code == 'weak-password') {
+        message = 'Kata sandi terlalu lemah.';
+      } else if (e.code == 'email-already-in-use') {
+        message = 'Email sudah digunakan.';
+      } else if (e.code == 'invalid-email') {
+        message = 'Format email tidak valid.';
+      }
+      if (mounted) {
+        _showCustomSnackBar(message, isError: true);
+      }
+    } catch (e) {
+      if (mounted) {
+        _showCustomSnackBar('Error: $e', isError: true);
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  void _showCustomSnackBar(String message, {required bool isError}) {
+    final theme = Theme.of(context);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Registrasi berhasil! Silakan masuk.')),
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              isError
+                  ? Icons.error_outline_rounded
+                  : Icons.check_circle_outline_rounded,
+              color: Colors.white,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: isError ? Colors.redAccent : theme.colorScheme.primary,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+        duration: const Duration(seconds: 4),
+      ),
     );
-    Navigator.pop(context);
   }
 
   @override
@@ -25,6 +126,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
@@ -122,6 +224,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               const SizedBox(height: 16),
               TextField(
+                controller: _confirmPasswordController,
                 obscureText: true,
                 decoration: InputDecoration(
                   labelText: 'Konfirmasi Kata Sandi',
@@ -141,7 +244,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
               // Register Button
               ElevatedButton(
-                onPressed: _handleRegister,
+                onPressed: _isLoading ? null : _handleRegister,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: theme.colorScheme.primary,
                   foregroundColor: Colors.white,
@@ -151,10 +254,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                   elevation: 0,
                 ),
-                child: const Text(
-                  'Daftar Sekarang',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
+                child: _isLoading
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Text(
+                        'Daftar Sekarang',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
               ),
               const SizedBox(height: 20),
 

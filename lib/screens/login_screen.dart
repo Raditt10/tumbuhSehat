@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../main.dart';
 import 'register_screen.dart';
 
@@ -14,12 +16,124 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isParentRole = true;
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  bool _isLoading = false;
 
-  void _handleLogin() {
-    // Dummy login logic: just navigate to Main Navigation
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => const MainNavigation()),
+  Future<void> _handleLogin() async {
+    if (_emailController.text.trim().isEmpty ||
+        _passwordController.text.trim().isEmpty) {
+      _showCustomSnackBar('Harap isi semua kolom.', isError: true);
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // 1. Sign in with Firebase Auth
+      UserCredential userCredential = await FirebaseAuth.instance
+          .signInWithEmailAndPassword(
+            email: _emailController.text.trim(),
+            password: _passwordController.text.trim(),
+          );
+
+      // 2. Fetch user role from Firestore to Verify
+      if (userCredential.user != null) {
+        DocumentSnapshot userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userCredential.user!.uid)
+            .get();
+
+        if (userDoc.exists) {
+          String role = userDoc.get('role');
+          bool isUserParent = role == 'orang_tua';
+
+          if (_isParentRole != isUserParent) {
+            // Wrong role selected
+            await FirebaseAuth.instance.signOut();
+            if (mounted) {
+              _showCustomSnackBar(
+                _isParentRole
+                    ? 'Gagal masuk: Akun ini terdaftar sebagai Kader.'
+                    : 'Gagal masuk: Akun ini terdaftar sebagai Orang Tua.',
+                isError: true,
+              );
+            }
+            return;
+          }
+
+          if (mounted) {
+            _showCustomSnackBar('Berhasil masuk!', isError: false);
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const MainNavigation()),
+            );
+          }
+        } else {
+          await FirebaseAuth.instance.signOut();
+          if (mounted) {
+            _showCustomSnackBar(
+              'Data pengguna tidak ditemukan.',
+              isError: true,
+            );
+          }
+        }
+      }
+    } on FirebaseAuthException catch (e) {
+      String message = 'Email atau kata sandi salah.';
+      if (e.code == 'invalid-credential' ||
+          e.code == 'wrong-password' ||
+          e.code == 'user-not-found') {
+        message = 'Email atau kata sandi tidak cocok.';
+      } else if (e.code == 'invalid-email') {
+        message = 'Format email tidak valid.';
+      }
+      if (mounted) {
+        _showCustomSnackBar(message, isError: true);
+      }
+    } catch (e) {
+      if (mounted) {
+        _showCustomSnackBar('Error: $e', isError: true);
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  void _showCustomSnackBar(String message, {required bool isError}) {
+    final theme = Theme.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              isError
+                  ? Icons.error_outline_rounded
+                  : Icons.check_circle_outline_rounded,
+              color: Colors.white,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: isError ? Colors.redAccent : theme.colorScheme.primary,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+        duration: const Duration(seconds: 4),
+      ),
     );
   }
 
@@ -61,7 +175,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   color: theme.colorScheme.primary,
                 ),
               ),
-              const SizedBox(height: 10), 
+              const SizedBox(height: 10),
               Text(
                 'Pantau tumbuh kembang anak dengan lebih mudah dan menyenangkan.',
                 textAlign: TextAlign.center,
@@ -186,7 +300,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
               // Login Button
               ElevatedButton(
-                onPressed: _handleLogin,
+                onPressed: _isLoading ? null : _handleLogin,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _isParentRole
                       ? theme.colorScheme.primary
@@ -198,10 +312,22 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   elevation: 0,
                 ),
-                child: const Text(
-                  'Masuk',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
+                child: _isLoading
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Text(
+                        'Masuk',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
               ),
               const SizedBox(height: 20),
 
