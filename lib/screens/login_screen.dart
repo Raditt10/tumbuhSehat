@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../main.dart';
 import 'register_screen.dart';
 
@@ -12,7 +13,6 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  // true = Orang Tua, false = Kader
   bool _isParentRole = true;
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -20,8 +20,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _handleLogin() async {
     if (_emailController.text.trim().isEmpty ||
-        _passwordController.text.trim().isEmpty) {
-      _showCustomSnackBar('Harap isi semua kolom.', isError: true);
+        _passwordController.text.isEmpty) {
+      _showCustomSnackBar('Harap isi email dan kata sandi.', isError: true);
       return;
     }
 
@@ -30,14 +30,12 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      // 1. Sign in with Firebase Auth
       UserCredential userCredential = await FirebaseAuth.instance
           .signInWithEmailAndPassword(
             email: _emailController.text.trim(),
-            password: _passwordController.text.trim(),
+            password: _passwordController.text,
           );
 
-      // 2. Fetch user role from Firestore to Verify
       if (userCredential.user != null) {
         DocumentSnapshot userDoc = await FirebaseFirestore.instance
             .collection('users')
@@ -49,7 +47,6 @@ class _LoginScreenState extends State<LoginScreen> {
           bool isUserParent = role == 'orang_tua';
 
           if (_isParentRole != isUserParent) {
-            // Wrong role selected
             await FirebaseAuth.instance.signOut();
             if (mounted) {
               _showCustomSnackBar(
@@ -80,32 +77,23 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       }
     } on FirebaseAuthException catch (e) {
-      String message = 'Email atau kata sandi salah.';
-      if (e.code == 'invalid-credential' ||
+      String message = 'Terjadi kesalahan.';
+      if (e.code == 'user-not-found' ||
           e.code == 'wrong-password' ||
-          e.code == 'user-not-found') {
-        message = 'Email atau kata sandi tidak cocok.';
+          e.code == 'invalid-credential') {
+        message = 'Email atau kata sandi salah.';
       } else if (e.code == 'invalid-email') {
         message = 'Format email tidak valid.';
       }
-      if (mounted) {
-        _showCustomSnackBar(message, isError: true);
-      }
+      if (mounted) _showCustomSnackBar(message, isError: true);
     } catch (e) {
-      if (mounted) {
-        _showCustomSnackBar('Error: $e', isError: true);
-      }
+      if (mounted) _showCustomSnackBar('Error: $e', isError: true);
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   void _showCustomSnackBar(String message, {required bool isError}) {
-    final theme = Theme.of(context);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
@@ -128,7 +116,7 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ],
         ),
-        backgroundColor: isError ? Colors.redAccent : theme.colorScheme.primary,
+        backgroundColor: isError ? Colors.redAccent : const Color(0xFF4CAF50),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
         margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
@@ -146,220 +134,357 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    // Colors based on Dribbble reference
+    const Color primaryGreen = Color(0xFF43A047);
+    const Color secondaryYellow = Color(0xFFFFCA28);
+    const Color buttonBlue = Color(0xFF29B6F6);
+    const Color bgLight = Color(0xFFF1F8E9);
 
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 40.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Lottie Animation or Illustration Placeholder
-              Center(
-                child: Icon(
-                  Icons.family_restroom_rounded,
-                  size: 100,
-                  color: theme.colorScheme.primary,
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              Text(
-                'Selamat Datang di\nRuang Tumbuh',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.displayLarge?.copyWith(
-                  fontSize: 28,
-                  height: 1.2,
-                  color: theme.colorScheme.primary,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                'Pantau tumbuh kembang anak dengan lebih mudah dan menyenangkan.',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 40),
-
-              // Role Toggle
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(30),
-                  border: Border.all(
-                    color: theme.colorScheme.primary.withOpacity(0.2),
+      backgroundColor: bgLight,
+      body: SingleChildScrollView(
+        child: Column(
+          children: [
+            // Curved Header
+            Stack(
+              children: [
+                ClipPath(
+                  clipper: HeaderClipperModern(),
+                  child: Container(
+                    height: 280,
+                    width: double.infinity,
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [secondaryYellow, primaryGreen],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                    ),
                   ),
                 ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => setState(() => _isParentRole = true),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          decoration: BoxDecoration(
-                            color: _isParentRole
-                                ? theme.colorScheme.primary
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(30),
+                Positioned(
+                  top: 100,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: Text(
+                      'Login',
+                      style: const TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+                // Role Toggle (Orang Tua / Kader)
+                Positioned(
+                  top: 160,
+                  left: 40,
+                  right: 40,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _buildRoleToggle('Orang Tua', true),
+                        _buildRoleToggle('Kader', false),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            // Form Container
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 30.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 20),
+                  const Text('Email address:', style: TextStyle(fontSize: 14)),
+                  const SizedBox(height: 8),
+                  _buildTextField(
+                    controller: _emailController,
+                    hintText: 'Enter your email address',
+                    icon: Icons.person_outline,
+                    keyboardType: TextInputType.emailAddress,
+                  ),
+                  const SizedBox(height: 20),
+
+                  const Text('Password:', style: TextStyle(fontSize: 14)),
+                  const SizedBox(height: 8),
+                  _buildTextField(
+                    controller: _passwordController,
+                    hintText: 'Enter the password',
+                    icon: Icons.lock_outline,
+                    isPassword: true,
+                  ),
+                  const SizedBox(height: 15),
+
+                  // Remember me & Forgot Password
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          SizedBox(
+                            height: 24,
+                            width: 24,
+                            child: Checkbox(
+                              value: false,
+                              onChanged: (val) {},
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              activeColor: primaryGreen,
+                            ),
                           ),
-                          child: Text(
-                            'Orang Tua',
-                            textAlign: TextAlign.center,
+                          const SizedBox(width: 8),
+                          const Text(
+                            'Remember me',
+                            style: TextStyle(fontSize: 12),
+                          ),
+                        ],
+                      ),
+                      TextButton(
+                        onPressed: () {},
+                        child: const Text(
+                          'Forgot password?',
+                          style: TextStyle(color: Colors.black54, fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // Main Login Button
+                  ElevatedButton(
+                    onPressed: _isLoading ? null : _handleLogin,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: buttonBlue,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: _isLoading
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Text(
+                            'Login',
                             style: TextStyle(
-                              color: _isParentRole ? Colors.white : Colors.grey,
-                              fontWeight: _isParentRole
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                  ),
+                  const SizedBox(height: 25),
+
+                  // Or login with
+                  Row(
+                    children: [
+                      Expanded(child: Divider(color: Colors.grey.shade400)),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 10),
+                        child: Text(
+                          'or login with',
+                          style: TextStyle(fontSize: 12, color: Colors.grey),
+                        ),
+                      ),
+                      Expanded(child: Divider(color: Colors.grey.shade400)),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Social Buttons
+                  _buildSocialButton(
+                    'Sign in with Google',
+                    FontAwesomeIcons.google,
+                    Colors.red,
+                  ),
+                  const SizedBox(height: 12),
+                  _buildSocialButton(
+                    'Sign in with Apple',
+                    FontAwesomeIcons.apple,
+                    Colors.black,
+                  ),
+
+                  const SizedBox(height: 30),
+
+                  // Register Link (Only for Parents)
+                  if (_isParentRole) ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text(
+                          "Don't have an account? ",
+                          style: TextStyle(fontSize: 14),
+                        ),
+                        GestureDetector(
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const RegisterScreen(),
+                            ),
+                          ),
+                          child: const Text(
+                            'Sign Up',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black,
                             ),
                           ),
                         ),
-                      ),
+                      ],
                     ),
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => setState(() => _isParentRole = false),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          decoration: BoxDecoration(
-                            color: !_isParentRole
-                                ? theme.colorScheme.secondary
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                          child: Text(
-                            'Kader Posyandu',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: !_isParentRole
-                                  ? Colors.white
-                                  : Colors.grey,
-                              fontWeight: !_isParentRole
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
+                    const SizedBox(height: 30),
                   ],
-                ),
+                ],
               ),
-              const SizedBox(height: 30),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
-              // Login Form
-              TextField(
-                controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
-                decoration: InputDecoration(
-                  labelText: 'Email',
-                  prefixIcon: Icon(
-                    Icons.email_outlined,
-                    color: theme.colorScheme.primary,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(15),
-                    borderSide: BorderSide.none,
-                  ),
-                  filled: true,
-                  fillColor: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _passwordController,
-                obscureText: true,
-                decoration: InputDecoration(
-                  labelText: 'Kata Sandi',
-                  prefixIcon: Icon(
-                    Icons.lock_outline_rounded,
-                    color: theme.colorScheme.primary,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(15),
-                    borderSide: BorderSide.none,
-                  ),
-                  filled: true,
-                  fillColor: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () {},
-                  child: Text(
-                    'Lupa Kata Sandi?',
-                    style: TextStyle(color: theme.colorScheme.primary),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // Login Button
-              ElevatedButton(
-                onPressed: _isLoading ? null : _handleLogin,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _isParentRole
-                      ? theme.colorScheme.primary
-                      : theme.colorScheme.secondary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(15),
-                  ),
-                  elevation: 0,
-                ),
-                child: _isLoading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Text(
-                        'Masuk',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-              ),
-              const SizedBox(height: 20),
-
-              // Go to Register (only for Parent)
-              if (_isParentRole)
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text('Belum punya akun? '),
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const RegisterScreen(),
-                          ),
-                        );
-                      },
-                      child: Text(
-                        'Daftar Sekarang',
-                        style: TextStyle(
-                          color: theme.colorScheme.primary,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-            ],
+  Widget _buildRoleToggle(String label, bool isParent) {
+    bool isSelected = _isParentRole == isParent;
+    return GestureDetector(
+      onTap: () => setState(() => _isParentRole = isParent),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? const Color(0xFF43A047) : Colors.white,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
           ),
         ),
       ),
     );
   }
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String hintText,
+    required IconData icon,
+    bool isPassword = false,
+    TextInputType keyboardType = TextInputType.text,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: TextField(
+        controller: controller,
+        obscureText: isPassword,
+        keyboardType: keyboardType,
+        decoration: InputDecoration(
+          hintText: hintText,
+          hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+          prefixIcon: Icon(icon, color: Colors.grey.shade400, size: 20),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(vertical: 15),
+          suffixIcon: isPassword
+              ? Icon(
+                  Icons.visibility_off_outlined,
+                  color: Colors.grey.shade400,
+                  size: 20,
+                )
+              : null,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSocialButton(String text, IconData icon, Color iconColor) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: () {},
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                FaIcon(icon, color: iconColor, size: 20),
+                const SizedBox(width: 12),
+                Text(
+                  text,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Custom Clipper for the Wavy Header
+class HeaderClipperModern extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) {
+    var path = Path();
+    path.lineTo(0, size.height - 80);
+
+    var firstControlPoint = Offset(size.width / 4, size.height);
+    var firstEndPoint = Offset(size.width / 2, size.height - 40);
+    path.quadraticBezierTo(
+      firstControlPoint.dx,
+      firstControlPoint.dy,
+      firstEndPoint.dx,
+      firstEndPoint.dy,
+    );
+
+    var secondControlPoint = Offset(size.width * 0.75, size.height - 80);
+    var secondEndPoint = Offset(size.width, size.height - 20);
+    path.quadraticBezierTo(
+      secondControlPoint.dx,
+      secondControlPoint.dy,
+      secondEndPoint.dx,
+      secondEndPoint.dy,
+    );
+
+    path.lineTo(size.width, 0);
+    path.close();
+    return path;
+  }
+
+  @override
+  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
 }
