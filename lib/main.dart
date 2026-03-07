@@ -1,11 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'firebase_options.dart';
 import 'screens/login_screen.dart';
+import 'services/seeder_service.dart';
+import 'services/app_navigator.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await initializeDateFormatting('id');
+
+  // Auto-seed some initial data if Firestore is empty to test dynamic UI
+  await SeederService().seedDummyData();
+
   runApp(const PosyanduApp());
 }
 
@@ -14,28 +23,29 @@ class PosyanduApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Definisi Warna Pastel yang ramah anak dan menenangkan
-    const Color toscaLembut = Color(0xFF80CBC4); // Teal 200
-    const Color pinkSalem = Color(0xFFFFCCBC); // Deep Orange 100
-    const Color biruBayi = Color(0xFFB3E5FC); // Light Blue 100
-    const Color backgroundApp = Color(0xFFF9FBE7); // Lime 50
+    // Definisi Warna Tema Biru Muda
+    const Color biruMuda = Color(0xFF4FC3F7); // Light Blue 300
+    const Color biruPucat = Color(0xFFE1F5FE); // Light Blue 50
+    const Color aksenBiru = Color(0xFF0288D1); // Light Blue 700
+    const Color backgroundApp = Color(0xFFF5F9FD); // Very light greyish blue
 
     return MaterialApp(
       title: 'Ruang Tumbuh Posyandu',
       debugShowCheckedModeBanner: false,
+      navigatorKey: appNavigatorKey,
       theme: ThemeData(
         // Font bisa diganti nanti, tapi sementara pakai visual yang membulat (default sans-serif)
         colorScheme: ColorScheme.fromSeed(
-          seedColor: toscaLembut,
-          primary: toscaLembut,
-          secondary: pinkSalem,
-          tertiary: biruBayi,
+          seedColor: biruMuda,
+          primary: biruMuda,
+          secondary: aksenBiru,
+          tertiary: biruPucat,
           background: backgroundApp,
           surface: Colors.white,
         ),
         scaffoldBackgroundColor: backgroundApp,
         appBarTheme: const AppBarTheme(
-          backgroundColor: toscaLembut,
+          backgroundColor: biruMuda,
           foregroundColor: Colors.white,
           elevation: 0,
           centerTitle: true,
@@ -46,24 +56,26 @@ class PosyanduApp extends StatelessWidget {
             letterSpacing: 0.5,
           ),
         ),
-        textTheme: const TextTheme(
-          displayLarge: TextStyle(
-            fontSize: 32,
-            fontWeight: FontWeight.bold,
-            color: Colors.black87,
+        textTheme: GoogleFonts.poppinsTextTheme(
+          const TextTheme(
+            displayLarge: TextStyle(
+              fontSize: 32,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+            titleLarge: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
+              color: Colors.black87,
+            ),
+            titleMedium: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+            ),
+            bodyLarge: TextStyle(fontSize: 16, color: Colors.black87),
+            bodyMedium: TextStyle(fontSize: 14, color: Colors.black54),
           ),
-          titleLarge: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.w700,
-            color: Colors.black87,
-          ),
-          titleMedium: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            color: Colors.black87,
-          ),
-          bodyLarge: TextStyle(fontSize: 16, color: Colors.black87),
-          bodyMedium: TextStyle(fontSize: 14, color: Colors.black54),
         ),
         useMaterial3: true,
       ),

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../services/auth_service.dart';
+import '../widgets/top_notification.dart';
 import 'main_navigation.dart';
 import 'register_screen.dart';
 
@@ -13,15 +15,36 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  bool _isParentRole = true;
+  static const Color _primaryBlue = Color(0xFF0288D1);
+
+  String _selectedRole = 'orang_tua'; // 'orang_tua', 'ibu_hamil', 'kader'
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
+  bool _isGoogleLoading = false;
+  bool _obscurePassword = true;
+  bool _rememberMe = false;
+  final AuthService _authService = AuthService();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedCredentials();
+  }
+
+  Future<void> _loadSavedCredentials() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _emailController.text = prefs.getString('saved_email') ?? '';
+      _passwordController.text = prefs.getString('saved_password') ?? '';
+      _rememberMe = prefs.getBool('remember_me') ?? false;
+    });
+  }
 
   Future<void> _handleLogin() async {
     if (_emailController.text.trim().isEmpty ||
         _passwordController.text.isEmpty) {
-      _showCustomSnackBar('Harap isi email dan kata sandi.', isError: true);
+      _showNotification('Harap isi email dan kata sandi.', isError: true);
       return;
     }
 
@@ -30,6 +53,18 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
+      if (_rememberMe) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('saved_email', _emailController.text.trim());
+        await prefs.setString('saved_password', _passwordController.text);
+        await prefs.setBool('remember_me', true);
+      } else {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('saved_email');
+        await prefs.remove('saved_password');
+        await prefs.setBool('remember_me', false);
+      }
+
       UserCredential userCredential = await FirebaseAuth.instance
           .signInWithEmailAndPassword(
             email: _emailController.text.trim(),
@@ -44,15 +79,17 @@ class _LoginScreenState extends State<LoginScreen> {
 
         if (userDoc.exists) {
           String role = userDoc.get('role');
-          bool isUserParent = role == 'orang_tua';
 
-          if (_isParentRole != isUserParent) {
+          if (_selectedRole != role) {
             await FirebaseAuth.instance.signOut();
             if (mounted) {
-              _showCustomSnackBar(
-                _isParentRole
-                    ? 'Gagal masuk: Akun ini terdaftar sebagai Kader.'
-                    : 'Gagal masuk: Akun ini terdaftar sebagai Orang Tua.',
+              String roleName = role == 'orang_tua'
+                  ? 'Orang Tua'
+                  : role == 'ibu_hamil'
+                  ? 'Ibu Hamil'
+                  : 'Kader';
+              _showNotification(
+                'Gagal masuk: Akun ini terdaftar sebagai $roleName.',
                 isError: true,
               );
             }
@@ -60,19 +97,17 @@ class _LoginScreenState extends State<LoginScreen> {
           }
 
           if (mounted) {
-            _showCustomSnackBar('Berhasil masuk!', isError: false);
+            _showNotification('Berhasil masuk!', isError: false);
             Navigator.pushReplacement(
               context,
-              MaterialPageRoute(builder: (context) => const MainNavigation()),
+              MaterialPageRoute(
+                  builder: (context) => MainNavigation(role: role)),
             );
           }
         } else {
           await FirebaseAuth.instance.signOut();
           if (mounted) {
-            _showCustomSnackBar(
-              'Data pengguna tidak ditemukan.',
-              isError: true,
-            );
+            _showNotification('Data pengguna tidak ditemukan.', isError: true);
           }
         }
       }
@@ -85,44 +120,103 @@ class _LoginScreenState extends State<LoginScreen> {
       } else if (e.code == 'invalid-email') {
         message = 'Format email tidak valid.';
       }
-      if (mounted) _showCustomSnackBar(message, isError: true);
+      if (mounted) _showNotification(message, isError: true);
     } catch (e) {
-      if (mounted) _showCustomSnackBar('Error: $e', isError: true);
+      if (mounted) _showNotification('Error: $e', isError: true);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  void _showCustomSnackBar(String message, {required bool isError}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            Icon(
-              isError
-                  ? Icons.error_outline_rounded
-                  : Icons.check_circle_outline_rounded,
-              color: Colors.white,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                message,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ],
-        ),
-        backgroundColor: isError ? Colors.redAccent : const Color(0xFF4CAF50),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-        duration: const Duration(seconds: 4),
-      ),
-    );
+  Future<void> _handleGoogleSignIn() async {
+    setState(() => _isGoogleLoading = true);
+
+    try {
+      // Step 1: Sign in with Google to Firebase
+      final User? user = await _authService.signInWithGoogle();
+      if (user == null) {
+        setState(() => _isGoogleLoading = false);
+        return;
+      }
+
+      // Step 2: Check if this UID has a Firestore user doc
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      if (!userDoc.exists) {
+        // No Firestore doc = orphaned/unlinked Google account
+        // Delete orphaned Firebase Auth account and sign out
+        await user.delete();
+        await _authService.signOutGoogle();
+        if (mounted) {
+          _showNotification(
+            'Akun Google ini belum dikaitkan. '
+            'Login dengan email/password, lalu hubungkan di halaman Profil.',
+            isError: true,
+          );
+        }
+        return;
+      }
+
+      // Step 3: Doc exists - check if Google is properly linked
+      final linkedEmail = userDoc.data()?['linkedGoogleEmail'];
+      if (linkedEmail == null || (linkedEmail as String).isEmpty) {
+        // User doc exists but Google not linked (email/password only account)
+        await FirebaseAuth.instance.signOut();
+        await _authService.signOutGoogle();
+        if (mounted) {
+          _showNotification(
+            'Login Google belum diaktifkan untuk akun ini. '
+            'Hubungkan di halaman Profil terlebih dahulu.',
+            isError: true,
+          );
+        }
+        return;
+      }
+
+      // Step 4: Verify role
+      final String existingRole = userDoc.get('role');
+      if (_selectedRole != existingRole) {
+        await FirebaseAuth.instance.signOut();
+        await _authService.signOutGoogle();
+        if (mounted) {
+          String roleName = existingRole == 'orang_tua'
+              ? 'Orang Tua'
+              : existingRole == 'ibu_hamil'
+                  ? 'Ibu Hamil'
+                  : 'Kader';
+          _showNotification(
+            'Akun ini terdaftar sebagai $roleName.',
+            isError: true,
+          );
+        }
+        return;
+      }
+
+      // Step 5: All good — navigate to dashboard
+      if (mounted) {
+        _showNotification('Berhasil masuk dengan Google!', isError: false);
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => MainNavigation(role: existingRole),
+          ),
+        );
+      }
+    } catch (e) {
+      await _authService.signOutGoogle();
+      if (mounted) {
+        _showNotification('Gagal masuk dengan Google: $e', isError: true);
+      }
+    } finally {
+      if (mounted) setState(() => _isGoogleLoading = false);
+    }
+  }
+
+  void _showNotification(String message, {required bool isError}) {
+    TopNotification.show(context, message, isError: isError);
   }
 
   @override
@@ -134,11 +228,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Colors based on Dribbble reference
-    const Color primaryGreen = Color(0xFF43A047);
-    const Color secondaryYellow = Color(0xFFFFCA28);
-    const Color buttonBlue = Color(0xFF29B6F6);
-    const Color bgLight = Color(0xFFF1F8E9);
+    // Theme colors
+    const Color primaryBlue = _primaryBlue;
+    const Color bgLight = Color(0xFFF5F9FD);
 
     return Scaffold(
       backgroundColor: bgLight,
@@ -154,12 +246,20 @@ class _LoginScreenState extends State<LoginScreen> {
                     height: 280,
                     width: double.infinity,
                     decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [secondaryYellow, primaryGreen],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
+                      image: DecorationImage(
+                        image: AssetImage('assets/images/posyandu_header.png'),
+                        fit: BoxFit.cover,
                       ),
                     ),
+                  ),
+                ),
+                // Overlay for better text readability
+                ClipPath(
+                  clipper: HeaderClipperModern(),
+                  child: Container(
+                    height: 280,
+                    width: double.infinity,
+                    color: Colors.black.withOpacity(0.3),
                   ),
                 ),
                 Positioned(
@@ -180,19 +280,19 @@ class _LoginScreenState extends State<LoginScreen> {
                 // Role Toggle (Orang Tua / Kader)
                 Positioned(
                   top: 160,
-                  left: 40,
-                  right: 40,
+                  left: 30,
+                  right: 30,
                   child: Container(
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.3),
+                      color: Colors.white.withOpacity(0.25),
                       borderRadius: BorderRadius.circular(30),
                     ),
                     child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
-                        _buildRoleToggle('Orang Tua', true),
-                        _buildRoleToggle('Kader', false),
+                        _buildRoleToggle('Orang Tua', 'orang_tua'),
+                        _buildRoleToggle('Ibu Hamil', 'ibu_hamil'),
+                        _buildRoleToggle('Kader', 'kader'),
                       ],
                     ),
                   ),
@@ -237,12 +337,16 @@ class _LoginScreenState extends State<LoginScreen> {
                             height: 24,
                             width: 24,
                             child: Checkbox(
-                              value: false,
-                              onChanged: (val) {},
+                              value: _rememberMe,
+                              onChanged: (val) {
+                                setState(() {
+                                  _rememberMe = val ?? false;
+                                });
+                              },
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(4),
                               ),
-                              activeColor: primaryGreen,
+                              activeColor: primaryBlue,
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -268,7 +372,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ElevatedButton(
                     onPressed: _isLoading ? null : _handleLogin,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: buttonBlue,
+                      backgroundColor: primaryBlue,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
@@ -312,22 +416,12 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 20),
 
                   // Social Buttons
-                  _buildSocialButton(
-                    'Sign in with Google',
-                    FontAwesomeIcons.google,
-                    Colors.red,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildSocialButton(
-                    'Sign in with Apple',
-                    FontAwesomeIcons.apple,
-                    Colors.black,
-                  ),
+                  _buildGoogleButton(),
 
                   const SizedBox(height: 30),
 
-                  // Register Link (Only for Parents)
-                  if (_isParentRole) ...[
+                  // Register Link (Only for Parents & Ibu Hamil)
+                  if (_selectedRole != 'kader') ...[
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -339,7 +433,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           onTap: () => Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => const RegisterScreen(),
+                              builder: (context) =>
+                                  RegisterScreen(initialRole: _selectedRole),
                             ),
                           ),
                           child: const Text(
@@ -364,21 +459,34 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _buildRoleToggle(String label, bool isParent) {
-    bool isSelected = _isParentRole == isParent;
-    return GestureDetector(
-      onTap: () => setState(() => _isParentRole = isParent),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? Colors.white : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSelected ? const Color(0xFF43A047) : Colors.white,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+  Widget _buildRoleToggle(String label, String role) {
+    bool isSelected = _selectedRole == role;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _selectedRole = role),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(25),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: _primaryBlue.withOpacity(0.15),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
+                : [],
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: isSelected ? _primaryBlue : Colors.white,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+              fontSize: 13,
+            ),
           ),
         ),
       ),
@@ -400,7 +508,7 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
       child: TextField(
         controller: controller,
-        obscureText: isPassword,
+        obscureText: isPassword ? _obscurePassword : false,
         keyboardType: keyboardType,
         decoration: InputDecoration(
           hintText: hintText,
@@ -409,10 +517,19 @@ class _LoginScreenState extends State<LoginScreen> {
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(vertical: 15),
           suffixIcon: isPassword
-              ? Icon(
-                  Icons.visibility_off_outlined,
-                  color: Colors.grey.shade400,
-                  size: 20,
+              ? IconButton(
+                  icon: Icon(
+                    _obscurePassword
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    color: Colors.grey.shade400,
+                    size: 20,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _obscurePassword = !_obscurePassword;
+                    });
+                  },
                 )
               : null,
         ),
@@ -420,7 +537,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _buildSocialButton(String text, IconData icon, Color iconColor) {
+  Widget _buildGoogleButton() {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -431,22 +548,28 @@ class _LoginScreenState extends State<LoginScreen> {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(10),
-          onTap: () {},
+          onTap: _isGoogleLoading ? null : _handleGoogleSignIn,
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                FaIcon(icon, color: iconColor, size: 20),
-                const SizedBox(width: 12),
-                Text(
-                  text,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                  ),
-                ),
-              ],
+              children: _isGoogleLoading
+                  ? const [
+                      SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ]
+                  : [
+                      Image.asset('assets/images/google_logo.png', height: 24),
+                      const SizedBox(width: 12),
+                      const Text(
+                        'Sign in with Google',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 14),
+                      ),
+                    ],
             ),
           ),
         ),

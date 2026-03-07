@@ -12,7 +12,20 @@
           "package_name": "com.example.ruang_tumbuh"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "1034210306885-7rs4isanu789uvn473ti9gu9bpvcu9td.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.ruang_tumbuh",
+            "certificate_hash": "b4c524d7dace5061e61b8eafc6f08994254c4d3e"
+          }
+        },
+        {
+          "client_id": "1034210306885-1nubmao7hslmeqnc980scl20fibc8j8j.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyCJNd0tpIrmCqcXMnauoKYO1uBb_RmUv3M"
@@ -20,7 +33,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1034210306885-1nubmao7hslmeqnc980scl20fibc8j8j.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "1034210306885-b50mfge6qvlj7qv1c8v6u95anr112k5p.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.ruangTumbuh"
+              }
+            }
+          ]
         }
       }
     }
