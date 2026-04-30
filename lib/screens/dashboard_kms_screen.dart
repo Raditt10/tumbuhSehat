@@ -203,7 +203,7 @@ class _DashboardKmsScreenState extends State<DashboardKmsScreen> {
                       end: Alignment.bottomRight,
                     ).createShader(bounds),
                     child: const Text(
-                      'Posyandu Ciguruwik',
+                      'Puspasehat 27',
                       style: TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.bold,

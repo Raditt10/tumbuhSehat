@@ -7,7 +7,7 @@
 
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:ruang_tumbuh/main.dart';
+import 'package:puspasehat_27/main.dart';
 
 void main() {
   testWidgets('App starts smoke test', (WidgetTester tester) async {
@@ -15,6 +15,6 @@ void main() {
     await tester.pumpWidget(const PosyanduApp());
 
     // Verify that our app starts and displays the text.
-    expect(find.text('Selamat Datang di\nRuang Tumbuh'), findsOneWidget);
+    expect(find.text('Selamat Datang di\nPuspasehat 27'), findsOneWidget);
   });
 }

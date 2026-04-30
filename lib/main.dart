@@ -13,13 +13,17 @@ void main() async {
   await initializeDateFormatting('id');
 
   // Auto-seed some initial data if Firestore is empty to test dynamic UI
-  await SeederService().seedDummyData();
+  try {
+    await SeederService().seedDummyData();
+  } catch (e) {
+    print('Gagal menjalankan seeder (mungkin karena belum login/permission denied): $e');
+  }
 
-  runApp(const PosyanduApp());
+  runApp(const PuspasahatApp());
 }
 
-class PosyanduApp extends StatelessWidget {
-  const PosyanduApp({super.key});
+class PuspasahatApp extends StatelessWidget {
+  const PuspasahatApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -30,7 +34,7 @@ class PosyanduApp extends StatelessWidget {
     const Color backgroundApp = Color(0xFFF5F9FD); // Very light greyish blue
 
     return MaterialApp(
-      title: 'Ruang Tumbuh Posyandu',
+      title: 'Puspasehat 27',
       debugShowCheckedModeBanner: false,
       navigatorKey: appNavigatorKey,
       theme: ThemeData(
