@@ -123,7 +123,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     width: double.infinity,
                     decoration: const BoxDecoration(
                       image: DecorationImage(
-                        image: AssetImage('assets/images/posyandu_header.png'),
+                        image: AssetImage('assets/images/register.png'),
                         fit: BoxFit.cover,
                       ),
                     ),

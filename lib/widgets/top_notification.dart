@@ -71,7 +71,9 @@ class _TopNotificationWidgetState extends State<_TopNotificationWidget>
     // Auto dismiss after 3 seconds
     Future.delayed(const Duration(seconds: 3), () {
       if (mounted) {
-        _controller.reverse().then((_) => widget.onDismiss());
+        _controller.reverse().then((_) {
+          if (mounted) widget.onDismiss();
+        });
       }
     });
   }

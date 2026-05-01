@@ -17,7 +17,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   static const Color _primaryBlue = Color(0xFF0288D1);
 
-  String _selectedRole = 'orang_tua'; // 'orang_tua', 'ibu_hamil', 'kader'
+  String _selectedRole = 'umum'; // 'umum', 'kader'
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
@@ -80,7 +80,14 @@ class _LoginScreenState extends State<LoginScreen> {
         if (userDoc.exists) {
           String role = userDoc.get('role');
 
-          if (_selectedRole != role) {
+          bool roleMatches = false;
+          if (_selectedRole == 'umum' && (role == 'orang_tua' || role == 'ibu_hamil')) {
+            roleMatches = true;
+          } else if (_selectedRole == 'kader' && role == 'kader') {
+            roleMatches = true;
+          }
+
+          if (!roleMatches) {
             await FirebaseAuth.instance.signOut();
             if (mounted) {
               String roleName = role == 'orang_tua'
@@ -101,7 +108,8 @@ class _LoginScreenState extends State<LoginScreen> {
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(
-                  builder: (context) => MainNavigation(role: role)),
+                builder: (context) => MainNavigation(role: role),
+              ),
             );
           }
         } else {
@@ -178,15 +186,22 @@ class _LoginScreenState extends State<LoginScreen> {
 
       // Step 4: Verify role
       final String existingRole = userDoc.get('role');
-      if (_selectedRole != existingRole) {
+      bool roleMatches = false;
+      if (_selectedRole == 'umum' && (existingRole == 'orang_tua' || existingRole == 'ibu_hamil')) {
+        roleMatches = true;
+      } else if (_selectedRole == 'kader' && existingRole == 'kader') {
+        roleMatches = true;
+      }
+
+      if (!roleMatches) {
         await FirebaseAuth.instance.signOut();
         await _authService.signOutGoogle();
         if (mounted) {
           String roleName = existingRole == 'orang_tua'
               ? 'Orang Tua'
               : existingRole == 'ibu_hamil'
-                  ? 'Ibu Hamil'
-                  : 'Kader';
+              ? 'Ibu Hamil'
+              : 'Kader';
           _showNotification(
             'Akun ini terdaftar sebagai $roleName.',
             isError: true,
@@ -240,6 +255,7 @@ class _LoginScreenState extends State<LoginScreen> {
             // Curved Header
             Stack(
               children: [
+                // Background image (original)
                 ClipPath(
                   clipper: HeaderClipperModern(),
                   child: Container(
@@ -247,13 +263,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     width: double.infinity,
                     decoration: const BoxDecoration(
                       image: DecorationImage(
-                        image: AssetImage('assets/images/posyandu_header.png'),
+                        image: AssetImage('assets/images/login.png'),
                         fit: BoxFit.cover,
                       ),
                     ),
                   ),
                 ),
-                // Overlay for better text readability
+                // Overlay for text readability
                 ClipPath(
                   clipper: HeaderClipperModern(),
                   child: Container(
@@ -262,36 +278,64 @@ class _LoginScreenState extends State<LoginScreen> {
                     color: Colors.black.withOpacity(0.3),
                   ),
                 ),
+                // Branding: icon + PuspaSehat27
                 Positioned(
-                  top: 100,
+                  top: 55,
                   left: 0,
                   right: 0,
                   child: Center(
-                    child: Text(
-                      'Login',
-                      style: const TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
+                    child: Column(
+                      children: [
+                        // Logo
+                        Image.asset(
+                          'assets/images/logo.png',
+                          height: 70,
+                          width: 70,
+                        ),
+                        const SizedBox(height: 10),
+                        // App name
+                        const Text(
+                          'PuspaSehat27',
+                          style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        // Subtitle
+                        Text(
+                          'Posyandu Digital Terpadu',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w400,
+                            color: Colors.white.withOpacity(0.85),
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-                // Role Toggle (Orang Tua / Kader)
+                // Role Toggle (Orang Tua / Ibu Hamil / Kader)
                 Positioned(
-                  top: 160,
+                  top: 200,
                   left: 30,
                   right: 30,
                   child: Container(
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.25),
+                      color: Colors.black.withOpacity(0.35),
                       borderRadius: BorderRadius.circular(30),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.2),
+                        width: 1,
+                      ),
                     ),
                     child: Row(
                       children: [
-                        _buildRoleToggle('Orang Tua', 'orang_tua'),
-                        _buildRoleToggle('Ibu Hamil', 'ibu_hamil'),
+                        _buildRoleToggle('Umum', 'umum'),
                         _buildRoleToggle('Kader', 'kader'),
                       ],
                     ),
@@ -434,7 +478,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             context,
                             MaterialPageRoute(
                               builder: (context) =>
-                                  RegisterScreen(initialRole: _selectedRole),
+                                  const RegisterScreen(initialRole: 'orang_tua'),
                             ),
                           ),
                           child: const Text(
@@ -567,7 +611,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       const Text(
                         'Sign in with Google',
                         style: TextStyle(
-                            fontWeight: FontWeight.w600, fontSize: 14),
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
                       ),
                     ],
             ),

@@ -12,9 +12,9 @@ import 'package:puspasehat_27/main.dart';
 void main() {
   testWidgets('App starts smoke test', (WidgetTester tester) async {
     // Build our app and trigger a frame.
-    await tester.pumpWidget(const PosyanduApp());
+    await tester.pumpWidget(const PuspasahatApp());
 
-    // Verify that our app starts and displays the text.
-    expect(find.text('Selamat Datang di\nPuspasehat 27'), findsOneWidget);
+    // Verify that our app starts and displays the Login screen.
+    expect(find.text('Login'), findsOneWidget);
   });
 }
